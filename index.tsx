@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { supabase, WalletCheck } from "./supabaseClient";
 
 // Add global declaration for Solana/Phantom
 declare global {
@@ -246,17 +247,68 @@ const App = () => {
     setError("");
     setResult(null);
 
-    // Simulate Network/AI Delay to make it feel real
-    setTimeout(() => {
-      try {
-        const outcome = determineStatus(formData.name);
-        setResult(outcome);
-      } catch (err) {
-        setError("The elves dropped the list. Try again.");
-      } finally {
-        setLoading(false);
+    try {
+      const { data: existingCheck, error: fetchError } = await supabase
+        .from('wallet_checks')
+        .select('*')
+        .eq('wallet_address', formData.name)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Database error:', fetchError);
       }
-    }, 4500); // 4.5 seconds delay for suspense
+
+      // Simulate loading for better UX
+      await new Promise(resolve => setTimeout(resolve, 4500));
+
+      if (existingCheck) {
+        const { error: updateError } = await supabase
+          .from('wallet_checks')
+          .update({
+            last_checked_at: new Date().toISOString(),
+            check_count: (existingCheck.check_count || 1) + 1
+          })
+          .eq('wallet_address', formData.name);
+
+        if (updateError) {
+          console.error('Update error:', updateError);
+        }
+
+        setResult({
+          status: existingCheck.status as 'Nice' | 'Naughty',
+          message: existingCheck.message,
+          gift: existingCheck.gift
+        });
+      } else {
+        const outcome = determineStatus(formData.name);
+
+        const newCheck: WalletCheck = {
+          wallet_address: formData.name,
+          status: outcome.status,
+          message: outcome.message,
+          gift: outcome.gift,
+          age: parseInt(formData.age) || 0,
+          survey_q1: formData.surveyQ1,
+          survey_q2: formData.surveyQ2,
+          check_count: 1
+        };
+
+        const { error: insertError } = await supabase
+          .from('wallet_checks')
+          .insert([newCheck]);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+        }
+
+        setResult(outcome);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError("The elves dropped the list. Try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
