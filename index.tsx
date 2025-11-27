@@ -333,7 +333,7 @@ const App = () => {
             Santawojak
           </h1>
           <p className="text-white text-lg font-serif-display italic opacity-90">
-            CA Soon
+            CA: Soon
           </p>
         </header>
 
